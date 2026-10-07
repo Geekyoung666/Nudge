@@ -29,7 +29,7 @@ repository.ensureDemoData();
 
 const { visitorMiddleware, errorShape } = require('./routes/common');
 
-const PORT = Number(process.env.PORT) || 3000;
+const port = process.env.PORT || 8080;
 
 // DEMO_MODE 默认开启；只有显式置为 false / 0 才进入生产适配模式。
 const DEMO_MODE = !['false', '0', 'no'].includes(String(process.env.DEMO_MODE).toLowerCase());
@@ -99,9 +99,9 @@ app.use((err, req, res, next) => {
   res.status(500).json(errorShape('INTERNAL_ERROR', 'errors.internal', true));
 });
 
-app.listen(PORT, () => {
+app.listen(port, '0.0.0.0', () => {
   // 仅打印启动信息，不打印任何密钥 / 内部状态。
-  console.log(`[Nudge] server listening on http://localhost:${PORT} (mode=${MODE})`);
+  console.log(`[Nudge] server listening on http://localhost:${port} (mode=${MODE})`);
 });
 
 module.exports = app;
