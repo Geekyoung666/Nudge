@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Nudge</title>
+  <link rel="stylesheet" href="/styles/console.css" />
+  <link rel="stylesheet" href="/styles/app.css" />
+</head>
+<body>
+  <div id="app" class="route-home">
+
+    <!-- ============================================================= -->
+    <!-- Background + Agent Layer：数字人即 Agent 本体（数字人1(男)⇄数字人2(女)） -->
+    <!-- 高度 ~100vh · cover · 人物居中 · 允许底部自然裁切 · 无边框无容器阴影 -->
+    <!-- ============================================================= -->
+    <img class="bg-human" id="bgHuman" data-gender="male" src="/assets/human_male_bg.jpg" alt="" aria-hidden="true" />
+
+    <!-- Navigation（弱化：非视觉主体。文字链接，无胶囊排布） -->
+    <nav class="app-nav" id="appNav" aria-label="main navigation">
+      <button class="app-nav__logo" id="navHome" data-route="home" title="Nudge Home">Nudge</button>
+      <button class="app-nav__link" id="navMemory" data-route="memory" data-i18n="nav.memory">记忆</button>
+      <button class="app-nav__link" id="navDecision" data-action="decision" title="Decision Console">决策</button>
+      <button class="app-nav__link" id="navPermission" data-route="permission" title="Permission">权限</button>
+      <button class="app-nav__link" id="navSettings" data-route="settings" data-i18n="nav.settings">设置</button>
+      <button class="app-nav__link" id="navLlm" data-action="llm" title="配置 LLM API（用于面试演示）">API</button>
+      <button class="app-nav__link" id="genderBtn" data-action="gender" data-i18n-title="gender.title" title="切换数字人形象">♀</button>
+      <!-- V15：清空对话迁移至顶部导航（dock 瘦身；点击弹二次确认） -->
+      <button class="app-nav__link app-nav__reset" id="resetChatBtn" data-action="reset-chat" data-i18n-title="chat.clearTitle" title="清空对话记忆">🗑️</button>
+      <button class="app-nav__link app-nav__lang" id="langBtn" data-action="language" title="切换语言">中 / EN</button>
+    </nav>
+
+    <!-- ============================================================= -->
+    <!-- Agent Layer：围绕数字人的空间信息弧（左侧自上而下） -->
+    <!-- ============================================================= -->
+
+    <!-- ① Greeting：左侧统一文字块（大气标题 + 描述 + Agent 引导语） -->
+    <header class="agent-greeting" id="agentGreeting" aria-label="greeting">
+      <h1 id="greetTitle">☀ 早，Young</h1>
+      <p id="greetSub">昨晚睡得有点少，<br />今天先别急着跟计划硬碰硬。</p>
+      <p class="greet-speech" id="agentSpeech">我注意到你昨晚睡得有点少，今天先别急着安排高强度训练。如果你下午状态好一点，我们再看看。</p>
+    </header>
+
+    <!-- ② 左中：状态卡（点击弹详情抽屉） -->
+    <aside class="state-card home-only" id="stateCard" aria-label="state">
+      <h2 class="state-card__title" id="stateTitle">今天的你</h2>
+      <div class="state-grid" id="stateBody"></div>
+      <p class="state-card__summary" id="stateSummary"></p>
+    </aside>
+
+    <!-- ②b 左下：名人名言卡（图二原型） -->
+    <aside class="quote-card home-only" id="quoteCard" aria-label="quote">
+      <span class="quote-card__avatar" aria-hidden="true"></span>
+      <p class="quote-card__text" id="quoteText">真正的自律，不是强迫自己做什么，而是始终清楚自己为什么这样做。</p>
+    </aside>
+
+    <!-- ④ 右侧：接下来卡（垂直时间轴；点击弹完整周期计划抽屉） -->
+    <aside class="next-card home-only" id="nextCard" aria-label="next">
+      <h2 class="next-card__title" id="nextTitle">接下来</h2>
+      <div class="next-timeline" id="nextTimeline"></div>
+      <p class="next-card__footer" id="nextFooter"></p>
+    </aside>
+
+    <!-- ⑤ 打字模式开关（纯 CSS 切换：输入框直接替换"按住说话"，右侧显示"切换语音"） -->
+    <input type="checkbox" id="typeToggle" class="type-toggle" hidden />
+
+    <!-- ⑤ 对话记录（隐藏容器；Agent 回复同步到 #agentSpeech） -->
+    <section class="conversation home-only" id="conversation" aria-label="conversation">
+      <div class="conversation__log" id="convLog"></div>
+    </section>
+
+    <!-- ============================================================= -->
+    <!-- Foreground Layer -->
+    <!-- ============================================================= -->
+
+    <!-- ⑥ Voice Dock：主要交互入口（胶囊：waveform + 按住说话/输入框 + waveform + 切换打字/切换语音） -->
+    <div class="voice-dock home-only" id="voiceDock" aria-label="voice dock">
+      <span class="voice-dock__wave voice-dock__wave--left" aria-hidden="true"></span>
+      <button class="voice-dock__mic" id="micBtn" data-i18n-title="mic.title" title="语音输入"><span class="voice-dock__micIcon" aria-hidden="true">🎙</span><span id="micLabel">按住说话</span></button>
+      <span class="voice-dock__typebox" id="typebox">
+        <textarea id="convInput" data-i18n-placeholder="chat.placeholder" placeholder="说点什么…（回车发送）" rows="1"></textarea>
+        <button class="voice-dock__send" id="convSend" data-i18n="chat.send">发送</button>
+      </span>
+      <span class="voice-dock__wave voice-dock__wave--right" aria-hidden="true"></span>
+      <label class="voice-dock__mode" id="typeLabel" for="typeToggle" title="切换输入方式">
+        <span class="mode-type" id="modeTypeText">⌨ 切换打字</span>
+        <span class="mode-voice" id="modeVoiceText">🎙 切换语音</span>
+      </label>
+      <span class="voice-dock__hint" id="voiceHint" data-i18n="voice.hint.initial"></span>
+    </div>
+
+    <!-- Decision Console：由导航"决策"呼出（.active 驱动显隐） -->
+    <section class="console panel" id="console" aria-label="Decision Console">
+      <header class="console__head">
+        <span class="console__title" id="consoleTitle" data-i18n="console.title">决策控制台</span>
+        <span class="console__hint" id="consoleHint" data-i18n="console.hint">只读 decision_events</span>
+        <button class="console__demo" id="consoleDemo" type="button">▶ 自动演示</button>
+      </header>
+      <div class="runner" id="runner" aria-label="Scenario runner"></div>
+      <div class="pulse" id="pulse">
+        <span class="pulse__pills" id="pulsePills"></span>
+        <span class="pulse__done" id="pulseDone" data-i18n="pulse.done">⌁ 决策已更新</span>
+      </div>
+      <div class="console__body" id="consoleBody">
+        <div class="empty" id="consoleEmpty" data-i18n="console.empty">运行一个场景，或点击下方历史回放。</div>
+      </div>
+      <div class="history" id="history">
+        <div class="history__title" id="historyTitle" data-i18n="history.title">历史回放</div>
+        <div id="historyList"><div class="empty" data-i18n="history.empty">暂无决策记录。</div></div>
+      </div>
+    </section>
+
+    <!-- 详情抽屉：状态历史（点击"今天的你"滑入；与其它面板互斥） -->
+    <aside class="drawer panel" id="stateDrawer" aria-label="state detail">
+      <div class="drawer__backdrop" data-close></div>
+      <header class="drawer__head">
+        <h3 class="drawer__title" id="stateDrawerTitle">状态详情</h3>
+        <button class="drawer__close" id="stateDrawerClose" data-i18n-title="common.close" title="关闭">×</button>
+      </header>
+      <div class="drawer__body" id="stateDrawerBody"></div>
+    </aside>
+
+    <!-- 详情抽屉：完整周期计划（点击"接下来"滑入） -->
+    <aside class="drawer panel drawer--right" id="nextDrawer" aria-label="plan detail">
+      <div class="drawer__backdrop" data-close></div>
+      <header class="drawer__head">
+        <h3 class="drawer__title" id="nextDrawerTitle">周期计划</h3>
+        <button class="drawer__close" id="nextDrawerClose" data-i18n-title="common.close" title="关闭">×</button>
+      </header>
+      <div class="drawer__body" id="nextDrawerBody"></div>
+    </aside>
+
+    <!-- 路由内容（memory / permission / settings 浮层；.active 驱动显隐；数字人不重建） -->
+    <main class="route-content panel" id="routeContent"></main>
+
+    <!-- LLM API 配置弹窗（面试演示用；密钥仅存服务端内存，不写 localStorage / 不进控制台） -->
+    <section class="llm-modal" id="llmConfigModal" aria-label="LLM API 配置" role="dialog">
+      <div class="llm-modal__backdrop" id="llmConfigBackdrop"></div>
+      <div class="llm-modal__card">
+        <header class="llm-modal__head">
+          <h3>LLM API 配置</h3>
+          <button class="llm-modal__close" id="llmConfigClose" title="关闭" aria-label="关闭">×</button>
+        </header>
+        <div class="llm-modal__body">
+          <label class="llm-field"><span>Provider</span>
+            <input id="cfgProvider" type="text" value="openai-compatible" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="llm-field"><span>Model</span>
+            <input id="cfgModel" type="text" placeholder="gpt-4o-mini / glm-4 / deepseek-chat …" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="llm-field"><span>API Key</span>
+            <input id="cfgApiKey" type="password" autocomplete="off" placeholder="sk-…" spellcheck="false" />
+          </label>
+          <label class="llm-field"><span>Base URL</span>
+            <input id="cfgBaseUrl" type="text" placeholder="https://api.openai.com/v1" autocomplete="off" spellcheck="false" />
+          </label>
+          <p class="llm-modal__note">密钥仅存于服务端内存，不写入浏览器本地存储、不出现在控制台；服务重启即失效。</p>
+        </div>
+        <footer class="llm-modal__foot">
+          <span class="llm-modal__status" id="llmConfigStatus"></span>
+          <button class="llm-modal__save" id="llmConfigSave">保存并验证</button>
+        </footer>
+      </div>
+    </section>
+    <!-- V15：清空对话二次确认弹窗（顶部导航 🗑️ 触发；backdrop 点击 = 取消） -->
+    <section class="confirm-modal" id="clearConfirm" role="dialog" aria-modal="true" aria-label="清空对话确认">
+      <div class="confirm-modal__backdrop" data-clear-cancel></div>
+      <div class="confirm-modal__card">
+        <h3 class="confirm-modal__title" data-i18n="confirm.title">清空对话</h3>
+        <p class="confirm-modal__text" data-i18n="confirm.text">确定要清空当前对话记录吗？</p>
+        <div class="confirm-modal__actions">
+          <button class="confirm-modal__btn confirm-modal__btn--ghost" data-clear-cancel data-i18n="confirm.cancel">取消</button>
+          <button class="confirm-modal__btn confirm-modal__btn--danger" data-clear-ok data-i18n="confirm.ok">清空</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/scripts/i18n.js" defer></script>
+  <script src="/scripts/console.js" defer></script>
+  <script src="/scripts/app.js" defer></script>
+  <script src="/scripts/text.js" defer></script>
+  <script src="/scripts/voice.js" defer></script>
+  <script src="/scripts/home.js" defer></script>
+</body>
+</html>

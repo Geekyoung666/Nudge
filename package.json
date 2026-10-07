@@ -1,0 +1,18 @@
+{
+  "name": "nudge",
+  "version": "1.5.0",
+  "private": true,
+  "description": "Nudge - Proactive when it matters. Personal Sports Agent (v1.5 Demo).",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "fetch-model": "node scripts/fetch-model.mjs"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

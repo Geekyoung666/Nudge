@@ -1,0 +1,977 @@
+/* ===========================================================================
+ * Nudge v1.5 — Spatial UI Layout（数字人即 Agent 本体）
+ * 三层空间：Background(环境/人物) → Agent Layer(表达/State/Next) → Foreground(Dock/Pulse)
+ * 视觉优先级：Digital Human > Agent Expression > Voice > State > Next > Pulse > Nav
+ * ========================================================================= */
+:root {
+  /* tokens */
+  --bg-base: #ECEEF3;
+  --text-primary: #1A1A1A;
+  --text-secondary: #666666;
+  --text-tertiary: #888888;
+  --accent-blue: #4F6BFF;
+  --accent-cyan: #2FA8BC;
+  --accent-green: #4C9E6E;
+  --accent-red: #D26060;
+  --accent-purple: #8A6FD1;
+
+  /* Agent 层：深色玻璃（漂浮在人物前） */
+  --dark-glass: rgba(12, 18, 32, 0.46);
+  --dark-glass-light: rgba(12, 18, 32, 0.26);
+  --dark-border: rgba(255, 255, 255, 0.10);
+  --dark-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+  --on-dark: #F5F7FA;
+  --on-dark-dim: rgba(255, 255, 255, 0.60);
+
+  /* Foreground 层 */
+  --fg-glass: rgba(12, 18, 32, 0.55);
+
+  --radius: 20px;
+  --gutter: 28px;
+  /* 全站统一宋体排版栈（用户指定） */
+  --font-serif: -apple-system, "Songti SC", "STSong", "SimSun", serif;
+  --font-kaiti: -apple-system, "Songti SC", "STSong", "SimSun", serif;
+  --font-sans: -apple-system, "Songti SC", "STSong", "SimSun", serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+#app { position: absolute; inset: 0; }
+
+/* ===========================================================================
+ * Background Layer：数字人（Agent 本体）。~100vh、cover、人物居中、底部自然裁切。
+ * 无 border、无容器 shadow；切换平滑淡入淡出；永不拦截交互。
+ * ========================================================================= */
+.bg-human {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  object-position: center center;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.18s ease;
+}
+.bg-human.is-switching { opacity: 0; }
+
+/* ===========================================================================
+ * Navigation（最弱层级）：文字链接，无胶囊排布
+ * ========================================================================= */
+.app-nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 18px 32px;
+  pointer-events: none;           /* 只有按钮可点 */
+}
+.app-nav button {
+  pointer-events: auto;
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  color: rgba(255, 255, 255, 0.82);
+  transition: color 0.15s ease;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
+}
+.app-nav button:hover { color: #FFFFFF; }
+.app-nav__logo {
+  font-family: var(--font-serif) !important;
+  font-size: 19px !important;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #FFFFFF !important;
+  margin-right: 8px;
+}
+.app-nav__link { font-size: 13px; letter-spacing: 0.05em; }
+.app-nav__link.is-active { color: var(--text-primary); font-weight: 600; }
+.app-nav__lang { margin-left: auto; font-size: 12px; letter-spacing: 0.1em; }
+/* V15：顶部 🗑️ 清空对话 —— 极小幽灵图标按钮（EN 左侧） */
+.app-nav__reset { font-size: 13px; opacity: 0.66; transition: opacity 0.18s ease, transform 0.18s ease; }
+.app-nav__reset:hover { opacity: 1; transform: translateY(-1px); }
+/* V12：语言/性别按钮放大显眼（字号与文字颜色不变，仅加胶囊描边+内边距） */
+#langBtn,
+#genderBtn {
+  padding: 7px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.50);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.10);
+}
+
+/* ===========================================================================
+ * Agent Layer ① Greeting：属于 Agent Presence（人物左侧上方，衬线大字）
+ * ========================================================================= */
+/* ===========================================================================
+ * Agent Layer ① Greeting：左侧统一文字块（大气标题 + 描述 + Agent 引导语）
+ * top 40 / left 40；标题 ≥48px 深色加粗；整块不越过人物脸部中线（max-width 上限）
+ * ========================================================================= */
+.agent-greeting {
+  position: absolute;
+  left: 130px;
+  top: 130px;
+  z-index: 45;
+  pointer-events: none;
+  width: 460px;
+  max-width: min(44vw, 460px);
+}
+.agent-greeting h1 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 46px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  line-height: 1.1;
+  color: #FFFFFF;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;   /* 英文 "Good afternoon, Young" 不再断行 */
+}
+.agent-greeting p {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+/* Agent 引导语：问候区下方的统一文字块 */
+.agent-greeting .greet-speech {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.80);
+}
+
+/* ===========================================================================
+ * Agent Layer ③ State Card「今天的你」：左侧浅色毛玻璃（图二原型）
+ * left 40px / top 250px / width 300px；浅色玻璃 + 内阴影，深色文字，大字数值+趋势
+ * 点击弹出状态详情抽屉（#stateDrawer，与其它面板互斥）
+ * ========================================================================= */
+.state-card {
+  position: absolute;
+  left: 425px;
+  top: 395px;
+  z-index: 46;
+  width: 300px;
+  padding: 24px;
+  border-radius: var(--radius);
+  background: rgba(15, 22, 38, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 20px 50px rgba(0, 0, 0, 0.30);
+  backdrop-filter: blur(24px) saturate(125%);
+  -webkit-backdrop-filter: blur(24px) saturate(125%);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.state-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 26px 60px rgba(0, 0, 0, 0.36);
+}
+.state-card__title {
+  margin: 0 0 14px;
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.78);
+}
+.state-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+}
+.state-grid .m-cell { min-width: 0; }
+.state-grid .m-val {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+}
+.state-grid .m-val .unit { font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, 0.55); margin-left: 3px; }
+.state-grid .m-label { margin-top: 4px; font-family: var(--font-serif); font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.62); letter-spacing: 0.04em; }
+.state-card__summary {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.84);
+}
+/* 深底上的趋势色（柔和、非霓虹） */
+.trend-up   { color: #7FD8A8; }
+.trend-down { color: #7CC7DE; }
+.trend-stable { color: rgba(255, 255, 255, 0.50); }
+
+/* ===========================================================================
+ * Agent Layer ④ Next Card「接下来」：右侧浅色毛玻璃 + 垂直时间轴（图二原型）
+ * right 40px / top 380px / width 320px；底部"今晚 21:00 评估"提示
+ * 点击弹出完整周期计划抽屉（#nextDrawer）
+ * ========================================================================= */
+.next-card {
+  position: absolute;
+  right: 40px;
+  top: auto;
+  bottom: 140px;                  /* 与左侧名言卡同一水平线（页面平衡） */
+  z-index: 46;
+  width: 320px;
+  padding: 24px;
+  border-radius: var(--radius);
+  background: rgba(15, 22, 38, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 20px 50px rgba(0, 0, 0, 0.30);
+  backdrop-filter: blur(24px) saturate(125%);
+  -webkit-backdrop-filter: blur(24px) saturate(125%);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.next-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 26px 60px rgba(0, 0, 0, 0.36);
+}
+.next-card__title {
+  margin: 0 0 14px;
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.78);
+}
+/* 垂直时间轴：左侧竖线 + 圆点节点 */
+.next-timeline { position: relative; padding-left: 22px; }
+.next-timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(47, 168, 188, 0.85), rgba(47, 168, 188, 0.16));
+}
+.tl-item { position: relative; }
+.tl-item + .tl-item { margin-top: 16px; }
+.tl-item::before {
+  content: '';
+  position: absolute;
+  left: -22px;                    /* 回到竖线上（点中心 x=9px，与竖线中心对齐） */
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 3px solid var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(47, 168, 188, 0.14);
+}
+.tl-item--muted::before { border-color: #B9C3D2; box-shadow: none; }
+.tl-date {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.55);
+  font-variant-numeric: tabular-nums;
+}
+.tl-text {
+  margin-top: 3px;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.8;
+  color: #FFFFFF;
+}
+.next-card__footer {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.18);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.68);
+}
+.next-card__empty { font-size: 13px; color: rgba(255, 255, 255, 0.55); }
+
+/* ===========================================================================
+ * Agent Layer ⑤ Quote Card「名人名言」：左下浅色卡（图二原型）
+ * left 40px / bottom 140px / width 300px；圆形头像 + 楷体引言
+ * 与 Voice Dock（bottom 30 + 高 76 → 顶 106px）不重叠
+ * ========================================================================= */
+.quote-card {
+  position: absolute;
+  left: 130px;                    /* V12：左缘与招呼语（left 130）同轴线 */
+  bottom: 140px;
+  z-index: 46;
+  width: clamp(190px, calc(50vw - 420px), 300px);   /* V12：窄桌面自动收窄，右缘永不压语音坞（宽屏仍 300） */
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px;
+  border-radius: var(--radius);
+  background: rgba(15, 22, 38, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 16px 40px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(24px) saturate(125%);
+  -webkit-backdrop-filter: blur(24px) saturate(125%);
+}
+.quote-card__avatar {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #F2E7D5, #D8C2A2);
+  color: #8A6D4B;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.85), 0 2px 6px rgba(20, 30, 60, 0.15);
+}
+.quote-card__avatar::before { content: '\201C'; padding-top: 8px; }
+.quote-card__text {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+/* ===========================================================================
+ * Foreground Layer ⑥ Voice Dock：主要交互入口（胶囊，底部居中）
+ * ========================================================================= */
+.voice-dock {
+  /* V16：绝对居中 + 黄金宽度（!important 强制覆盖；left:50% + translateX 居中，不用 margin 计算） */
+  position: absolute !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  bottom: 140px !important;                /* V16b：与名言卡/接下来卡下横轴对齐（两卡 bottom 均为 140px） */
+  z-index: 220;
+  width: 500px !important;                 /* V16：最佳视觉宽度 500px */
+  max-width: calc(100vw - 32px);           /* 小屏安全网，桌面不影响 500px */
+  height: 60px;                            /* 高度不变 */
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 12px;                               /* V16：按钮间 12px 呼吸感 */
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);   /* 毛玻璃质感不变 */
+  border: none;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(22px) saturate(120%);
+  -webkit-backdrop-filter: blur(22px) saturate(120%);
+  color: var(--on-dark);
+  transition: transform 0.4s ease;   /* 沉浸模式：输入坞平滑上移 */
+}
+.voice-dock__wave {
+  flex: 1;
+  height: 22px;
+  margin: 0 16px !important;               /* V16：波形不贴边，与按钮留呼吸感 */
+  background: repeating-linear-gradient(90deg,
+    rgba(255, 255, 255, 0.34) 0 2px, transparent 2px 8px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  transform-origin: center;
+}
+
+/* V17：按下说话时波形跳动（松开发送 → .wave-active 移除，平滑变安静） */
+.voice-dock__wave.wave-active {
+  animation: wave-bounce 0.9s ease-in-out infinite;
+  opacity: 0.95;
+}
+@keyframes wave-bounce {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
+  50%      { transform: scaleY(1);   opacity: 0.95; }
+}
+.voice-dock__mic {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 42px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #FFFFFF;
+  background: var(--accent-cyan);
+  box-shadow: 0 6px 18px rgba(47, 168, 188, 0.35);
+  transition: background 0.18s ease, transform 0.12s ease;
+  white-space: nowrap;
+}
+.voice-dock__mic:hover { background: #3D9BAC; }
+.voice-dock__mic:active { transform: scale(0.98); }
+.voice-dock__mic.is-active { background: #2FA8BC; animation: mic-pulse 1.6s ease-out infinite; }
+.voice-dock__mic.is-listening { background: var(--accent-green); }
+.voice-dock__mic.is-error { background: var(--accent-red); }
+.voice-dock__mic:disabled { opacity: 0.5; cursor: not-allowed; }
+.voice-dock__mode {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.18s ease, color 0.18s ease;
+  white-space: nowrap;
+}
+.voice-dock__mode:hover { border-color: rgba(255, 255, 255, 0.4); color: #FFFFFF; }
+#typeToggle:checked ~ .voice-dock .voice-dock__mode { border-color: var(--accent-cyan); color: #FFFFFF; }
+/* 打字模式：输入框 + 发送按钮直接替换"按住说话"（dock 内联，不再另起一行） */
+.voice-dock__typebox {
+  display: none;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+#typeToggle:checked ~ .voice-dock .voice-dock__mic { display: none; }
+#typeToggle:checked ~ .voice-dock .voice-dock__wave { display: none; }   /* 让位：输入框占满中部 */
+#typeToggle:checked ~ .voice-dock .voice-dock__typebox { display: flex; }
+.voice-dock__typebox textarea {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(12, 18, 32, 0.45);
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  resize: none;
+  outline: none;
+}
+.voice-dock__typebox textarea::placeholder { color: rgba(255, 255, 255, 0.45); }
+.voice-dock__typebox textarea:focus { border-color: var(--accent-cyan); }
+.voice-dock__send {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #FFFFFF;
+  background: var(--accent-cyan);
+  white-space: nowrap;
+}
+.voice-dock__send:hover { background: #3D9BAC; }
+.voice-dock__hint { display: none; }
+/* 右侧模式标签：默认"⌨ 切换打字"；打字模式下变"🎙 切换语音" */
+.voice-dock__mode .mode-voice { display: none; }
+#typeToggle:checked ~ .voice-dock .voice-dock__mode .mode-type { display: none; }
+#typeToggle:checked ~ .voice-dock .voice-dock__mode .mode-voice { display: inline; }
+@keyframes mic-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(47, 168, 188, 0.45); }
+  70%  { box-shadow: 0 0 0 12px rgba(47, 168, 188, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(47, 168, 188, 0); }
+}
+
+/* 对话记录容器（隐藏；仅承载 convLog，Agent 回复同步到 #agentSpeech 展示） */
+.conversation__log { display: none; }
+.bubble { display: none; }
+
+/* ===========================================================================
+ * Decision Console（无常驻按钮）：由导航"决策" / ⌁ chip 呼出，hidden 属性控制显隐
+ * ========================================================================= */
+.console {
+  position: absolute;
+  top: auto;
+  right: auto;
+  left: var(--gutter);
+  bottom: 88px;
+  width: 420px;
+  max-height: min(72vh, 640px);
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+  border-radius: var(--radius);
+  background: rgba(250, 250, 250, 0.92);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+}
+.console[hidden] { display: none; }
+.console::before { display: none; }
+
+/* ---------------------------------------------------------------------------
+ * Panel Manager 显隐规范（强制）：所有面板默认物理不可见（无尺寸/无背景/不接事件），
+ * 只有同时具有面板 id 与 .active 类时才显示。互斥由 app.js PANEL_IDS 遍历保证。
+ * 面板清单：#console / #routeContent / #stateDrawer / #nextDrawer
+ * ------------------------------------------------------------------------- */
+#console,
+.route-content,
+.drawer {
+  display: none !important;
+  opacity: 0;
+  pointer-events: none;
+}
+#console.active {
+  display: flex !important;
+  opacity: 1;
+  pointer-events: auto;
+}
+.route-content.active {
+  display: flex !important;
+  opacity: 1;
+  /* 保持 pointer-events:none —— 全屏容器不拦截点击，内部 .page 自行 auto */
+}
+.drawer.active {
+  display: flex !important;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ===========================================================================
+ * 居中磨玻璃编辑弹窗（V18）：点击「今天的你」/「接下来」弹出，取代侧边抽屉。
+ * 与其它面板严格互斥（PANEL_IDS）；position:fixed 绝对居中；深色磨玻璃统一主视觉。
+ * ========================================================================= */
+.drawer {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  max-height: 82vh;
+  z-index: 9999;
+  flex-direction: column;
+  background: rgba(18, 24, 36, 0.85);
+  backdrop-filter: blur(24px) saturate(120%);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  color: #EAEAEA;
+  overflow: hidden;
+  font-family: var(--font-serif);
+}
+#stateDrawer, #nextDrawer { left: 50%; right: auto; }
+.drawer__backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: -1; }
+.drawer.active { animation: modal-pop 0.22s cubic-bezier(0.32, 0.72, 0.28, 1) both; }
+@keyframes modal-pop {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex: 0 0 auto;
+}
+.drawer__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 19px;
+  letter-spacing: 0.05em;
+  color: #FFFFFF;
+}
+.drawer__close {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  font-size: 22px;
+  line-height: 1;
+  color: rgba(234, 234, 234, 0.6);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.drawer__close:hover { color: #FFFFFF; background: rgba(255, 255, 255, 0.08); }
+.drawer__body { flex: 1; overflow-y: auto; padding: 18px 24px 24px; color: #EAEAEA; }
+.drawer__body::-webkit-scrollbar { width: 8px; }
+.drawer__body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 8px; }
+.drawer .d-note { color: rgba(234, 234, 234, 0.7); }
+
+/* ---- V18：可编辑表单控件（磨玻璃输入，浅色文字） ---- */
+.edit-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.edit-row__top { display: flex; align-items: center; justify-content: space-between; }
+.edit-row__label { font-size: 13px; color: #EAEAEA; }
+.edit-row__val { font-size: 13px; font-weight: 600; color: #FFFFFF; min-width: 40px; text-align: right; }
+.edit-row input[type=range] { width: 100%; accent-color: var(--accent-cyan); cursor: pointer; margin: 2px 0; }
+.edit-trend { margin-top: 4px; padding: 7px 10px; border-radius: 9px; width: 100%;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF; font-family: var(--font-sans); font-size: 13px; }
+.edit-trend option { color: #111; }
+.edit-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.edit-field > label { font-size: 13px; color: #EAEAEA; font-family: var(--font-sans); }
+.edit-field textarea, .edit-field input[type=number], .edit-field input[type=text] {
+  width: 100%; padding: 9px 12px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF; font-family: var(--font-sans); font-size: 13px; box-sizing: border-box;
+}
+.edit-field textarea { min-height: 62px; resize: vertical; }
+.edit-field select { padding: 9px 12px; border-radius: 10px; width: 100%;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF; font-family: var(--font-sans); font-size: 13px; }
+.edit-field select option { color: #111; }
+.drawer__foot { display: flex; align-items: center; justify-content: center; margin-top: 18px; }
+.drawer__save {
+  padding: 10px 30px; border-radius: 999px; border: none; cursor: pointer;
+  background: var(--accent-cyan); color: #FFFFFF; font-family: var(--font-sans);
+  font-size: 14px; font-weight: 600; transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.drawer__save:hover { transform: translateY(-1px); }
+.drawer__save:disabled { opacity: 0.6; cursor: default; transform: none; }
+.drawer__error { color: #ff8a8a; font-size: 12.5px; min-height: 16px; text-align: center; margin-top: 8px; }
+
+/* 抽屉内容：分节 + 键值网格 + chips */
+.d-sec { margin-bottom: 20px; }
+.d-sec h4 {
+  margin: 0 0 9px;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: rgba(31, 41, 55, 0.45);
+  text-transform: uppercase;
+}
+.d-kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px 18px;
+  font-size: 13px;
+}
+.d-kv .k { color: var(--text-secondary); }
+.d-kv .v { color: var(--text-primary); font-weight: 500; text-align: right; overflow-wrap: anywhere; }
+.d-kv .unit { font-size: 11px; font-weight: 400; color: var(--text-tertiary); margin-left: 2px; }
+.d-goal {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: #17233B;
+  line-height: 1.35;
+}
+.d-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.d-chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(47, 168, 188, 0.12);
+  border: 1px solid rgba(47, 168, 188, 0.24);
+  color: #237E8E;
+  font-size: 12.5px;
+}
+.d-note { margin: 0; font-size: 12.5px; line-height: 1.7; color: var(--text-secondary); }
+
+/* ===========================================================================
+ * 路由浮层（memory / permission / settings）：数字人保持可见，浮层不遮脸
+ * ========================================================================= */
+.route-content {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: flex-start;    /* 浮层靠左：人物（Agent 本体）留在右侧完整可见 */
+  padding-left: 7%;
+  pointer-events: none;
+}
+/* 显隐统一由 .active 类驱动（见上方 Panel Manager 显隐规范）；route class 只负责内容与布局 */
+#app:not(.route-home) .home-only { display: none; }
+/* 非首页：Agent 表达与 State/Next 让位（Agent 本体=背景数字人仍在） */
+#app:not(.route-home) .agent-greeting { opacity: 0; transition: opacity 0.2s ease; }
+
+.page {
+  pointer-events: auto;
+  width: min(520px, 44vw);
+  max-height: 78vh;
+  overflow-y: auto;
+  background: rgba(12, 18, 32, 0.38);
+  border: 1px solid var(--dark-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(26px) saturate(115%);
+  -webkit-backdrop-filter: blur(26px) saturate(115%);
+  box-shadow: var(--dark-shadow);
+  padding: 24px 28px;
+  color: var(--on-dark);
+}
+.page__title { font-family: var(--font-serif); font-size: 21px; letter-spacing: 0.06em; margin: 0 0 4px; color: #FFFFFF; }
+.page__sub { font-family: var(--font-sans); font-size: 12px; color: var(--on-dark-dim); margin: 0 0 18px; }
+.page__section { margin-bottom: 18px; }
+.page__section h3 { font-family: var(--font-serif); font-size: 14px; letter-spacing: 0.05em; color: #8FCBD9; margin: 0 0 8px; }
+.kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; font-family: var(--font-sans); font-size: 13px; }
+.kv-grid .k { color: var(--on-dark-dim); }
+.kv-grid .v { color: var(--on-dark); }
+.mem-item { border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-family: var(--font-sans); font-size: 12.5px; color: var(--on-dark); background: rgba(255, 255, 255, 0.05); }
+.mem-item b { color: #FFFFFF; }
+.mem-item .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 10.5px; background: rgba(76, 158, 110, 0.18); color: #9FD8BC; border: 1px solid rgba(76, 158, 110, 0.30); margin-left: 6px; }
+.mem-item .tag.pending { background: rgba(138, 111, 209, 0.16); color: #BCA9E3; border-color: rgba(138, 111, 209, 0.32); }
+.page__close { margin-top: 8px; font-family: var(--font-sans); font-size: 12px; color: var(--on-dark-dim); cursor: pointer; background: none; border: none; text-decoration: underline; }
+
+/* 滚动条 */
+.route-content .page::-webkit-scrollbar { width: 8px; }
+.route-content .page::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 8px; }
+
+/* ---------------------------------------------------------------------------
+ * 响应式：绝对定位网格已锁定（left/right 40），窄屏只收底部坞与浮层，卡片坐标不动
+ * ------------------------------------------------------------------------- */
+/* V12：删除矮屏 bottom:128 兜底——名言卡与 Up next 卡统一 bottom:140，任何视口高度下边缘恒对齐 */
+@media (max-width: 1100px) {
+  .voice-dock { width: min(92vw, 560px); }
+  .route-content { padding-left: 4%; }
+  .page { width: min(480px, 62vw); }
+  .drawer { width: min(360px, 90vw); }
+}
+
+/* ---------------------------------------------------------------------------
+ * LLM API 配置弹窗（#llmConfigModal）
+ * 不在 PANEL_IDS 面板互斥清单内——独立浮层，自带 .is-open 显隐，不被 closeAllPanels 影响
+ * ------------------------------------------------------------------------- */
+.llm-modal { position: fixed; inset: 0; z-index: 9998; display: none; align-items: center; justify-content: center; }
+.llm-modal.is-open { display: flex; }
+.llm-modal__backdrop { position: absolute; inset: 0; background: rgba(6, 8, 14, 0.55); backdrop-filter: blur(2px); }
+.llm-modal__card {
+  position: relative; width: min(92vw, 420px);
+  background: rgba(16, 20, 30, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px; padding: 18px 18px 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.llm-modal__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.llm-modal__head h3 { margin: 0; font-size: 16px; font-weight: 600; color: #f4f5f7; }
+.llm-modal__close { background: none; border: none; color: rgba(244, 245, 247, 0.6); font-size: 20px; line-height: 1; cursor: pointer; }
+.llm-modal__close:hover { color: #f4f5f7; }
+.llm-modal__body { display: flex; flex-direction: column; gap: 12px; }
+.llm-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: rgba(244, 245, 247, 0.7); }
+.llm-field input {
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f4f5f7; border-radius: 10px; padding: 9px 11px; font-size: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.llm-field input:focus { outline: none; border-color: rgba(120, 170, 255, 0.6); }
+.llm-modal__note { margin: 4px 0 0; font-size: 11px; color: rgba(244, 245, 247, 0.45); line-height: 1.5; }
+.llm-modal__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+.llm-modal__status { font-size: 12px; min-height: 16px; }
+.llm-modal__status.is-err { color: #ff8a8a; }
+.llm-modal__status.is-ok { color: #8ad7a0; }
+.llm-modal__save {
+  background: #3b6cf6; color: #fff; border: none; border-radius: 10px;
+  padding: 9px 16px; font-size: 14px; cursor: pointer; white-space: nowrap;
+}
+.llm-modal__save:hover { background: #2f5be0; }
+
+/* V14：上下文超限气泡 + 内嵌一键清空按钮 */
+.bubble--action { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.bubble__clear {
+  align-self: flex-start;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(47, 168, 188, 0.55);
+  background: rgba(47, 168, 188, 0.14);
+  color: #9adfe8;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.bubble__clear:hover { background: rgba(47, 168, 188, 0.3); color: #ffffff; }
+
+/* ==========================================================================
+ * V13b：对话聚焦模式 —— 发送消息后隐藏悬浮卡片，保证对话字幕不被遮挡；
+ *       由 home.js 在发送/回复时挂 body.dialoguing，回复后 3s 自动恢复（V19 与沉浸模式对齐）
+ * ========================================================================= */
+.state-card,
+.quote-card,
+.next-card {
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+body.dialoguing .state-card,
+body.dialoguing .quote-card,
+body.dialoguing .next-card {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+}
+
+/* ==========================================================================
+ * 沉浸模式（输入时减少视觉干扰）：只模糊三张卡片，数字人背景保持清晰；
+ * 底部输入坞平滑上移 10px。数字人 / 卡片结构 / 布局一律不动。
+ * ========================================================================= */
+.immersive-dim {
+  opacity: 0.15 !important;
+  filter: blur(8px) !important;
+  transition: all 0.4s ease !important;
+  pointer-events: none !important;
+}
+body.immersive .state-card,
+body.immersive .quote-card,
+body.immersive .next-card {
+  transition: opacity 0.4s ease, filter 0.4s ease !important;   /* 进入/退出双向平滑 */
+}
+body.immersive .voice-dock {
+  transform: translate(-50%, -10px) !important;                 /* 保留 translateX(-50%) 居中，仅上移 10px */
+}
+
+/* ==========================================================================
+ * V15：清空对话二次确认弹窗（顶部导航 🗑️ 触发）
+ * ========================================================================= */
+.confirm-modal { position: fixed; inset: 0; z-index: 420; display: none; }
+.confirm-modal.active { display: block; }
+.confirm-modal__backdrop {
+  position: absolute; inset: 0;
+  background: rgba(4, 8, 18, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.confirm-modal__card {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(320px, calc(100vw - 48px));
+  padding: 22px 22px 18px;
+  border-radius: 20px;
+  background: rgba(18, 26, 44, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(24px) saturate(120%);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  color: var(--on-dark);
+  font-family: var(--font-sans);
+  animation: confirm-in 0.22s ease;
+}
+@keyframes confirm-in {
+  from { opacity: 0; transform: translate(-50%, -46%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+.confirm-modal__title { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+.confirm-modal__text { margin: 0 0 18px; font-size: 13px; line-height: 1.7; color: rgba(255, 255, 255, 0.72); }
+.confirm-modal__actions { display: flex; justify-content: flex-end; gap: 10px; }
+.confirm-modal__btn {
+  height: 36px; padding: 0 18px; border-radius: 999px; border: none;
+  cursor: pointer; font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+}
+.confirm-modal__btn--ghost { background: rgba(255, 255, 255, 0.10); color: rgba(255, 255, 255, 0.85); }
+.confirm-modal__btn--ghost:hover { background: rgba(255, 255, 255, 0.18); }
+.confirm-modal__btn--danger { background: rgba(255, 107, 107, 0.9); color: #ffffff; }
+.confirm-modal__btn--danger:hover { background: #ff6b6b; }
+
+/* ==========================================================================
+ * V15：设置页「语音播报（TTS）」极简开关
+ * ========================================================================= */
+.setrow {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-top: 14px; padding: 12px 16px;
+  border-radius: 14px; background: rgba(255, 255, 255, 0.05);
+}
+.setrow .k { font-size: 13.5px; color: rgba(255, 255, 255, 0.88); }
+.switch {
+  position: relative; width: 44px; height: 26px; flex: 0 0 auto;
+  border-radius: 999px; border: none; cursor: pointer;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 0.2s ease;
+}
+.switch::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #ffffff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease;
+}
+.switch.is-on { background: var(--accent-cyan); }
+.switch.is-on::after { transform: translateX(18px); }
+
+/* ===========================================================================
+ * V-退出改造：沉浸模式「手动退出」按钮 + 长文本淡出
+ * 仅新增类，不改动数字人背景 / 输入坞 / 左右卡片的任何结构与样式。
+ * ========================================================================= */
+
+/* 长文本（#agentSpeech）退出时 0.2s 淡出，避免生硬消失 */
+#agentSpeech { transition: opacity 0.2s ease; }
+.immer-fade-out { opacity: 0 !important; }
+
+/* 沉浸式聊天「❮ 退出对话」按钮：屏幕左上角，极小优雅，仅沉浸态可见 */
+.immersive-exit-btn {
+  position: fixed;
+  top: 70px;
+  left: 32px;
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(15, 22, 38, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.18s ease, color 0.18s ease;
+  pointer-events: none;
+}
+.immersive-exit-btn.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.immersive-exit-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #FFFFFF;
+}
+
+/* 决策控制台 Why / Context 文本：完整显示，绝不截断（Bug 2 修复） */
+/* .trace-summary .row 是 flex 行；.v 默认 min-width:auto 不收缩，长文本会横向
+   撑出被 .console 的 overflow:hidden 裁切（表现为 "…weather M" 末尾字母被切断）。
+   设 min-width:0 + flex:1 让其在 flex 内收缩换行；pre-wrap + break-word 杜绝裁切；
+   超长文本允许容器内滚动而非切断。仅作用于决策文本，不触碰卡片/数字人/输入坞。 */
+.trace-summary .row { align-items: flex-start; }
+.trace-summary .v {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  overflow: visible !important;
+  max-height: 120px !important;
+  overflow-y: auto !important;
+}
