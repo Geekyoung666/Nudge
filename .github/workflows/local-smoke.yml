@@ -1,0 +1,71 @@
+name: Nudge local smoke test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Syntax-check JavaScript
+        run: |
+          find public/scripts server scripts -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | xargs -0 -n1 node --check
+      - name: Install browser test runtime
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Start app and verify API
+        run: |
+          npm start > /tmp/nudge-server.log 2>&1 &
+          echo $! > /tmp/nudge-server.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/api/health > /tmp/health.json; then break; fi
+            sleep 1
+          done
+          cat /tmp/nudge-server.log
+          node -e "const h=require('/tmp/health.json'); if(h.status!=='ok') process.exit(1); console.log('health OK', h)"
+          curl -fsS http://127.0.0.1:8080/api/bootstrap > /tmp/bootstrap.json
+          curl -fsS http://127.0.0.1:8080/api/i18n/dict > /tmp/dict.json
+          node -e "const b=require('/tmp/bootstrap.json'); if(!b.user || !b.digital_human) process.exit(1); console.log('bootstrap OK')"
+          node -e "const d=require('/tmp/dict.json'); if(!d.dict) process.exit(1); console.log('i18n dict OK')"
+      - name: Browser smoke test
+        run: |
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          (async () => {
+            const browser = await chromium.launch({headless: true});
+            const page = await browser.newPage();
+            const consoleErrors = [];
+            const pageErrors = [];
+            const failedRequests = [];
+            page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+            page.on('pageerror', err => pageErrors.push(err.message));
+            page.on('requestfailed', req => failedRequests.push(req.url() + ' :: ' + req.failure()?.errorText));
+            const response = await page.goto('http://127.0.0.1:8080/', { waitUntil: 'networkidle', timeout: 30000 });
+            await page.waitForTimeout(1500);
+            const body = await page.locator('body').innerText();
+            const internalKeys = body.match(/(?:nav|chat|home)\.[a-zA-Z0-9_.-]+/g) || [];
+            const result = { status: response?.status(), title: await page.title(), consoleErrors, pageErrors, failedRequests, internalKeys: [...new Set(internalKeys)], bodyPreview: body.slice(0, 500) };
+            console.log(JSON.stringify(result, null, 2));
+            await browser.close();
+            if (!response || response.status() >= 400 || pageErrors.length || result.internalKeys.length) process.exit(1);
+          })().catch(err => { console.error(err); process.exit(1); });
+          NODE
+      - name: Stop app
+        if: always()
+        run: if [ -f /tmp/nudge-server.pid ]; then kill "$(cat /tmp/nudge-server.pid)" || true; fi
