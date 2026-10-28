@@ -68,6 +68,28 @@ jobs:
             if (!response || response.status() >= 400 || consoleErrors.length || pageErrors.length || failedRequests.length || result.internalKeys.length || errorCards || serviceErrorVisible) process.exit(1);
           })().catch(err => { console.error(err); process.exit(1); });
           NODE
+      - name: Diagnose deployed frontend
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          BASE_URL="https://nudge.1987152093.workers.dev"
+          echo "=== deployed root headers ==="
+          curl -sS -L --max-time 25 -D /tmp/live-root-headers.txt "$BASE_URL/" -o /tmp/live-index.html
+          echo "curl_exit=$?"
+          sed -n '1,25p' /tmp/live-root-headers.txt
+          if [ -f /tmp/live-index.html ]; then
+            echo "=== deployed index markers ==="
+            grep -Eo 'scripts/[A-Za-z0-9_.-]+\.js([^" ]*)?|styles/[A-Za-z0-9_.-]+\.css([^" ]*)?' /tmp/live-index.html | sort -u
+            grep -nE 'i18n\.js|app\.js|home\.js|console\.js|voice\.js|text\.js|error\.js|Service unavailable|服务异常' /tmp/live-index.html | head -30
+          fi
+          for endpoint in /api/health /api/bootstrap /api/i18n/dict; do
+            echo "=== $endpoint ==="
+            curl -sS -L --max-time 25 -w '\nHTTP_STATUS=%{http_code} FINAL_URL=%{url_effective}\n' "$BASE_URL$endpoint" -o /tmp/live-response.json
+            echo "curl_exit=$?"
+            head -c 1800 /tmp/live-response.json
+            echo
+          done
       - name: Stop app
         if: always()
         run: if [ -f /tmp/nudge-server.pid ]; then kill "$(cat /tmp/nudge-server.pid)" || true; fi
