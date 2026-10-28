@@ -18,6 +18,25 @@
 
 window.NudgeI18n = (function () {
   var DICT = {};                 // key → { 'zh-CN':…, 'en-US':… }（启动后由服务端填充）
+  // 服务端字典不可用时的关键界面兜底，避免把内部 i18n key 暴露给用户。
+  // 仅覆盖应用外壳与首页空状态；业务数据仍必须来自 API，不在这里伪造。
+  var FALLBACK_DICT = {
+    'nav.home': { 'zh-CN': '主页', 'en-US': 'Home' },
+    'nav.memory': { 'zh-CN': '记忆', 'en-US': 'Memory' },
+    'nav.decision': { 'zh-CN': '决策', 'en-US': 'Decision' },
+    'nav.permission': { 'zh-CN': '权限', 'en-US': 'Permissions' },
+    'nav.settings': { 'zh-CN': '设置', 'en-US': 'Settings' },
+    'chat.agent': { 'zh-CN': 'Nudge', 'en-US': 'Nudge' },
+    'chat.welcome': { 'zh-CN': '你好，我是 Nudge。说说你今天的状态，或点左侧场景看我的决策过程。', 'en-US': "Hi, I'm Nudge. Tell me how you feel today, or run a scenario to see how I respond." },
+    'home.empty.state': { 'zh-CN': '暂无状态数据', 'en-US': 'No state data yet' },
+    'home.empty.plan': { 'zh-CN': '暂无计划', 'en-US': 'No plan yet' },
+    'home.state.title': { 'zh-CN': '今天的你', 'en-US': 'Your state today' },
+    'home.next.title': { 'zh-CN': '接下来', 'en-US': 'What comes next' },
+    'home.quote': { 'zh-CN': '真正的自律，不是强迫自己做什么，而是始终清楚自己为什么这样做。', 'en-US': 'Discipline is knowing why you do something, not forcing yourself to do it.' },
+    'chat.typeMode': { 'zh-CN': '⌨ 切换打字', 'en-US': '⌨ Type instead' },
+    'chat.voiceMode': { 'zh-CN': '🎙 切换语音', 'en-US': '🎙 Voice mode' },
+    'mic.label': { 'zh-CN': '按住说话', 'en-US': 'Hold to speak' }
+  };
   var locale = 'zh-CN';
   var listeners = [];            // locale 变化时的视图重渲染回调
   var dictReady = null;          // Promise（dict 拉取完成）
@@ -502,9 +521,16 @@ window.NudgeI18n = (function () {
   function init() {
     if (dictReady) return dictReady;
     dictReady = fetch('/api/i18n/dict')
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error('i18n dictionary request failed: ' + r.status);
+        return r.json();
+      })
       .then(function (data) {
         if (data && data.dict) DICT = data.dict;
+        // Canonical 字典优先；兜底字典只补缺失项。
+        Object.keys(FALLBACK_DICT).forEach(function (key) {
+          if (!DICT[key]) DICT[key] = FALLBACK_DICT[key];
+        });
         // 初始语言：用户上次选择（localStorage）优先；无记录则默认英文页面。
         // 服务端 settings.locale 仅作数据存储，不再决定初始语言。
         var saved = null;
@@ -515,7 +541,17 @@ window.NudgeI18n = (function () {
         notify();
         return true;
       })
-      .catch(function () { /* 字典拉取失败：t() 回退 key，UI 仍可用 */ });
+      .catch(function () {
+        // API/字典失败时仍初始化可读的壳层文案；状态和计划数据不在前端伪造。
+        DICT = Object.assign({}, FALLBACK_DICT);
+        var saved = null;
+        try { saved = window.localStorage.getItem('nudge.locale'); } catch (e) { /* 隐私模式容忍 */ }
+        locale = (saved === 'zh-CN' || saved === 'en-US') ? saved : 'zh-CN';
+        document.documentElement.lang = locale;
+        applyStatic();
+        notify();
+        return false;
+      });
     return dictReady;
   }
 
