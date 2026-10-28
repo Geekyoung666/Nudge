@@ -60,10 +60,12 @@ jobs:
             await page.waitForTimeout(1500);
             const body = await page.locator('body').innerText();
             const internalKeys = body.match(/(?:nav|chat|home)\.[a-zA-Z0-9_.-]+/g) || [];
-            const result = { status: response?.status(), title: await page.title(), consoleErrors, pageErrors, failedRequests, internalKeys: [...new Set(internalKeys)], bodyPreview: body.slice(0, 500) };
+            const errorCards = await page.locator('[data-nudge-state="error"]').count();
+            const serviceErrorVisible = body.includes('服务异常') || body.includes('Service unavailable');
+            const result = { status: response?.status(), title: await page.title(), consoleErrors, pageErrors, failedRequests, internalKeys: [...new Set(internalKeys)], errorCards, serviceErrorVisible, bodyPreview: body.slice(0, 500) };
             console.log(JSON.stringify(result, null, 2));
             await browser.close();
-            if (!response || response.status() >= 400 || pageErrors.length || result.internalKeys.length) process.exit(1);
+            if (!response || response.status() >= 400 || consoleErrors.length || pageErrors.length || failedRequests.length || result.internalKeys.length || errorCards || serviceErrorVisible) process.exit(1);
           })().catch(err => { console.error(err); process.exit(1); });
           NODE
       - name: Stop app
